@@ -31,7 +31,13 @@ jobs:
       - name: Install Python dependencies
         run: |
           pip install -r requirements.txt
-          pip install yt-dlp
+          # Force install latest yt-dlp to handle YouTube changes
+          pip install --upgrade --force-reinstall yt-dlp
+
+      - name: Check yt-dlp version
+        run: |
+          yt-dlp --version
+          echo "yt-dlp installed successfully"
 
       - name: Setup YouTube cookies
         run: |
@@ -39,9 +45,15 @@ jobs:
           if [ ! -z "${{ secrets.YOUTUBE_COOKIES }}" ]; then
             echo "${{ secrets.YOUTUBE_COOKIES }}" > ~/.config/yt-dlp/cookies.txt
             echo "✅ YouTube cookies configured"
+            echo "Cookie file size: $(wc -c < ~/.config/yt-dlp/cookies.txt) bytes"
           else
-            echo "⚠️ No YouTube cookies found - downloads may fail"
+            echo "⚠️ No YouTube cookies found - will try without authentication"
           fi
+
+      - name: Test video accessibility
+        run: |
+          echo "🔍 Testing video accessibility..."
+          yt-dlp --list-formats "https://youtu.be/Tvz8an1znIo" || echo "⚠️ Format listing failed, but continuing..."
 
       - name: Run clipper script
         run: python clipper/clipper.py

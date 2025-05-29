@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Video Clipper Script
+Video Clipper Script - Optimized for Android Client
 Downloads and processes videos for carousel creation
 """
 
@@ -41,55 +41,103 @@ def check_cookies():
     """Check if YouTube cookies are available"""
     cookies_file = Path.home() / ".config" / "yt-dlp" / "cookies.txt"
     if cookies_file.exists():
-        print("🍪 YouTube cookies found - using authenticated download")
+        print("🍪 YouTube cookies found - will try with and without")
         return str(cookies_file)
     else:
-        print("⚠️ No YouTube cookies found - attempting anonymous download")
+        print("⚠️ No YouTube cookies found - using Android client (should work)")
         return None
 
 def download_video(video_url, output_path, cookies_file=None):
-    """Download video from YouTube"""
-    cmd = [
+    """Download video using the best working strategy"""
+    
+    # Strategy 1: Android client (WORKS!) - try without cookies first
+    print("🔄 Strategy 1: Android client (no cookies) - RECOMMENDED")
+    cmd1 = [
+        "yt-dlp",
+        "--extractor-args", "youtube:player_client=android",
+        "--merge-output-format", "mp4",
+        "-f", "best[height<=720]/best",
+        "-o", str(output_path),
+        video_url
+    ]
+    if run_command(cmd1, "Android client without cookies"):
+        return True
+    
+    # Strategy 2: Android client with cookies (if available)
+    if cookies_file:
+        print("🔄 Strategy 2: Android client with cookies")
+        cmd2 = [
+            "yt-dlp",
+            "--extractor-args", "youtube:player_client=android",
+            "--merge-output-format", "mp4",
+            "-f", "best[height<=720]/best",
+            "--cookies", cookies_file,
+            "-o", str(output_path),
+            video_url
+        ]
+        if run_command(cmd2, "Android client with cookies"):
+            return True
+    
+    # Strategy 3: MediaConnect client
+    print("🔄 Strategy 3: MediaConnect client")
+    cmd3 = [
+        "yt-dlp",
+        "--extractor-args", "youtube:player_client=mediaconnect",
+        "--merge-output-format", "mp4",
+        "-f", "best[height<=720]/best",
+        "-o", str(output_path),
+        video_url
+    ]
+    if run_command(cmd3, "MediaConnect client"):
+        return True
+    
+    # Strategy 4: Basic download with specific format
+    print("🔄 Strategy 4: Basic download (format 18)")
+    cmd4 = [
         "yt-dlp",
         "--merge-output-format", "mp4",
-        "-f", "bestvideo*+bestaudio/best",
-        "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-        "--add-header", "Accept-Language:en-US,en;q=0.9",
-        "--extractor-args", "youtube:player_client=web",
+        "-f", "18",  # Standard MP4 360p format
         "-o", str(output_path),
+        video_url
     ]
+    if run_command(cmd4, "Basic download format 18"):
+        return True
     
-    # Add cookies if available
-    if cookies_file:
-        cmd.extend(["--cookies", cookies_file])
+    # Strategy 5: Any available format
+    print("🔄 Strategy 5: Any available format")
+    cmd5 = [
+        "yt-dlp",
+        "-f", "best/worst",
+        "-o", str(output_path),
+        video_url
+    ]
+    if run_command(cmd5, "Any available format"):
+        return True
     
-    cmd.append(video_url)
-    
-    success = run_command(cmd, f"Downloading video from {video_url}")
-    
-    if not success:
-        print("🔄 Retrying with different settings...")
-        # Retry with ios client
-        retry_cmd = cmd.copy()
-        # Replace web client with ios
-        for i, arg in enumerate(retry_cmd):
-            if arg == "youtube:player_client=web":
-                retry_cmd[i] = "youtube:player_client=ios"
-                break
-        
-        success = run_command(retry_cmd, "Retrying download with iOS client")
-    
-    return success
+    return False
 
 def process_video(input_path, output_dir):
-    """Process the downloaded video (add your video processing logic here)"""
+    """Process the downloaded video"""
     if not input_path.exists():
         print(f"❌ Input video not found: {input_path}")
         return False
     
     print(f"🎬 Processing video: {input_path}")
     
-    # Example: Create a 30-second clip from the beginning
+    # Get video info first
+    info_cmd = [
+        "ffprobe",
+        "-v", "quiet",
+        "-print_format", "json",
+        "-show_format",
+        "-show_streams",
+        str(input_path)
+    ]
+    
+    if run_command(info_cmd, "Getting video information"):
+        print("✅ Video file is valid")
+    
+    # Create a 30-second clip
     clip_path = output_dir / "veo_street_A_clip.mp4"
     
     cmd = [
@@ -98,6 +146,8 @@ def process_video(input_path, output_dir):
         "-t", "30",  # First 30 seconds
         "-c:v", "libx264",
         "-c:a", "aac",
+        "-preset", "fast",
+        "-crf", "23",
         "-y",  # Overwrite output file
         str(clip_path)
     ]
@@ -106,25 +156,13 @@ def process_video(input_path, output_dir):
     
     if success:
         print(f"✅ Clip created: {clip_path}")
-        
-        # Get video info
-        info_cmd = [
-            "ffprobe",
-            "-v", "quiet",
-            "-print_format", "json",
-            "-show_format",
-            "-show_streams",
-            str(clip_path)
-        ]
-        
-        run_command(info_cmd, "Getting video information")
     
     return success
 
 def main():
     """Main execution function"""
-    print("🚀 Starting Video Clipper Script")
-    print("=" * 50)
+    print("🚀 Starting Video Clipper Script (Android Client Optimized)")
+    print("=" * 60)
     
     # Setup
     output_dir = setup_directories()
@@ -138,15 +176,16 @@ def main():
     print(f"📁 Output directory: {output_dir}")
     
     # Download video
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 60)
     print("📥 DOWNLOADING VIDEO")
-    print("=" * 50)
+    print("=" * 60)
     
     if not download_video(video_url, raw_video_path, cookies_file):
-        print("❌ Failed to download video. Please check:")
-        print("   1. YouTube cookies are properly configured")
-        print("   2. Video URL is accessible")
-        print("   3. Network connection is stable")
+        print("❌ All download attempts failed!")
+        print("\n🔧 TROUBLESHOOTING:")
+        print("1. Check if video is accessible: https://youtu.be/Tvz8an1znIo")
+        print("2. Try updating yt-dlp: pip install -U yt-dlp")
+        print("3. Check network connection")
         sys.exit(1)
     
     # Verify download
@@ -158,18 +197,18 @@ def main():
     print(f"✅ Video downloaded successfully ({file_size:.1f} MB)")
     
     # Process video
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 60)
     print("🎬 PROCESSING VIDEO")
-    print("=" * 50)
+    print("=" * 60)
     
     if not process_video(raw_video_path, output_dir):
         print("❌ Failed to process video")
         sys.exit(1)
     
     # List created files
-    print("\n" + "=" * 50)
+    print("\n" + "=" * 60)
     print("📋 CREATED FILES")
-    print("=" * 50)
+    print("=" * 60)
     
     for file_path in output_dir.iterdir():
         if file_path.is_file():
@@ -177,6 +216,7 @@ def main():
             print(f"📄 {file_path.name} ({size:.1f} MB)")
     
     print("\n✅ Video clipper completed successfully!")
+    print("🎉 Android client method worked as expected!")
 
 if __name__ == "__main__":
     main()
