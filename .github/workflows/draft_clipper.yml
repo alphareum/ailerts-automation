@@ -3,7 +3,7 @@ name: Draft – Clip & Upload
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 */6 * * *"   # every 6 h
+    - cron: "0 */6 * * *"   # every 6 hours
 
 jobs:
   clipper:
@@ -11,27 +11,54 @@ jobs:
     env:
       DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with: 
+          python-version: "3.11"
 
-      - name: Install deps
+      - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg curl
+          
+      - name: Install rclone
+        run: |
+          curl https://rclone.org/install.sh | sudo bash
+
+      - name: Install Python dependencies
+        run: |
           pip install -r requirements.txt
           pip install yt-dlp
 
-      - name: Run clipper
+      - name: Setup YouTube cookies
+        run: |
+          mkdir -p ~/.config/yt-dlp
+          if [ ! -z "${{ secrets.YOUTUBE_COOKIES }}" ]; then
+            echo "${{ secrets.YOUTUBE_COOKIES }}" > ~/.config/yt-dlp/cookies.txt
+            echo "✅ YouTube cookies configured"
+          else
+            echo "⚠️ No YouTube cookies found - downloads may fail"
+          fi
+
+      - name: Run clipper script
         run: python clipper/clipper.py
 
-      - name: Configure rclone
+      - name: Configure rclone for Google Drive
         run: |
           mkdir -p ~/.config/rclone
           echo "${{ secrets.RCLONE_CONFIG }}" > ~/.config/rclone/rclone.conf
 
-      - name: Upload to Drive
+      - name: Upload files to Google Drive
         run: |
           TODAY=$(date +'%Y-%m-%d')
-          rclone copy "carousels/${TODAY}-veo-interview" "drive:${DRIVE_FOLDER_ID}"
+          if [ -d "carousels/${TODAY}-veo-interview" ]; then
+            echo "📤 Uploading files to Google Drive..."
+            rclone copy "carousels/${TODAY}-veo-interview" "drive:${DRIVE_FOLDER_ID}" -v
+            echo "✅ Upload completed"
+          else
+            echo "❌ No files found to upload in carousels/${TODAY}-veo-interview"
+            exit 1
+          fi
