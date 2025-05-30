@@ -1,76 +1,51 @@
-name: Draft – Clip & Upload
+name: Generate Carousel with Working Authentication
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 */6 * * *"   # every 6 hours
 
 jobs:
   clipper:
     runs-on: ubuntu-latest
-    env:
-      DRIVE_FOLDER_ID: ${{ secrets.DRIVE_FOLDER_ID }}
+    
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with: 
-          python-version: "3.11"
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg curl
-          
-      - name: Install rclone
-        run: |
-          curl https://rclone.org/install.sh | sudo bash
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y ffmpeg curl
 
-      - name: Install Python dependencies
-        run: |
-          pip install -r requirements.txt
-          # Force install latest yt-dlp to handle YouTube changes
-          pip install --upgrade --force-reinstall yt-dlp
+    - name: Install rclone
+      run: |
+        curl https://rclone.org/install.sh | sudo bash
 
-      - name: Check yt-dlp version
-        run: |
-          yt-dlp --version
-          echo "yt-dlp installed successfully"
+    - name: Install Python dependencies
+      run: |
+        pip install -r requirements.txt
+        pip install --upgrade --force-reinstall yt-dlp
 
-      - name: Setup YouTube cookies
-        run: |
-          mkdir -p ~/.config/yt-dlp
-          if [ ! -z "${{ secrets.YOUTUBE_COOKIES }}" ]; then
-            echo "${{ secrets.YOUTUBE_COOKIES }}" > ~/.config/yt-dlp/cookies.txt
-            echo "✅ YouTube cookies configured"
-            echo "Cookie file size: $(wc -c < ~/.config/yt-dlp/cookies.txt) bytes"
-          else
-            echo "⚠️ No YouTube cookies found - will try without authentication"
-          fi
+    - name: Verify yt-dlp installation
+      run: |
+        yt-dlp --version
+        echo "yt-dlp installed successfully"
 
-      - name: Test video accessibility
-        run: |
-          echo "🔍 Testing video accessibility..."
-          yt-dlp --list-formats "https://youtu.be/Tvz8an1znIo" || echo "⚠️ Format listing failed, but continuing..."
+    - name: Setup YouTube cookies
+      run: |
+        mkdir -p ~/.config/yt-dlp
+        if [ ! -z "${{ secrets.YOUTUBE_COOKIES }}" ]; then
+          echo "${{ secrets.YOUTUBE_COOKIES }}" > ~/.config/yt-dlp/cookies.txt
+          echo "✅ YouTube cookies configured"
+          echo "Cookie file size: $(wc -c < ~/.config/yt-dlp/cookies.txt) bytes"
+        else
+          echo "⚠️ No YouTube cookies found - will try without authentication"
+        fi
 
-      - name: Run clipper script
-        run: python clipper/clipper.py
-
-      - name: Configure rclone for Google Drive
-        run: |
-          mkdir -p ~/.config/rclone
-          echo "${{ secrets.RCLONE_CONFIG }}" > ~/.config/rclone/rclone.conf
-
-      - name: Upload files to Google Drive
-        run: |
-          TODAY=$(date +'%Y-%m-%d')
-          if [ -d "carousels/${TODAY}-veo-interview" ]; then
-            echo "📤 Uploading files to Google Drive..."
-            rclone copy "carousels/${TODAY}-veo-interview" "drive:${DRIVE_FOLDER_ID}" -v
-            echo "✅ Upload completed"
-          else
-            echo "❌ No files found to upload in carousels/${TODAY}-veo-interview"
-            exit 1
-          fi
+    - name: Test video accessibility
+      run: |
+        echo "🔍 Testing video accessibility..."
